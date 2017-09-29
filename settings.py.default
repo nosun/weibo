@@ -1,0 +1,28 @@
+# -- encoding:utf-8 --
+
+from os import path
+
+BASE_DIR = path.dirname(path.abspath(__file__))
+LOGS_DIR = path.join(BASE_DIR, "_logs")
+DATA_DIR = path.join(BASE_DIR, "_data")
+
+MYSQL_CONFIG = {
+    "host": "172.17.0.1",
+    "db": "weibo_scrapy",
+    "user": "root",
+    "passwd": "rensheng",
+    "charset": "utf8mb4"
+}
+
+MYSQL_CONFIG_SERVICE = {
+    "host": "",
+    "db": "",
+    "user": "",
+    "passwd": "",
+    "charset": "utf8"
+}
+
+INS_ACCOUNT = {
+    "username": "demo",
+    "password": "demo"
+}

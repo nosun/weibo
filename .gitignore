@@ -1,0 +1,6 @@
+_data
+_logs
+*.pyc
+.idea
+settings.py
+
