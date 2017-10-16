@@ -33,6 +33,12 @@ class MysqlHelper(object):
 
     def upsert_wb_user(self, user):
         self.db.insertOrUpdate(self.tb_wb_user, user, "uid")
+        self.db.commit()
+        return self.db.lastId()
+
+    def upsert_wb_user_by_name(self, user):
+        self.db.insertOrUpdate(self.tb_wb_user, user, "name")
+        self.db.commit()
         return self.db.lastId()
 
     def get_last_wb_post_id(self, uid):
@@ -72,4 +78,4 @@ if __name__ == "__main__":
     #     print i
 
     weibo_id = db.get_last_wb_post_id("5667151225")
-    print weibo_id
+    print(weibo_id)

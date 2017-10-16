@@ -2,7 +2,7 @@
 import os
 import json
 import requests
-from requests.exceptions import ProxyError
+from requests.exceptions import ProxyError, SSLError, ReadTimeout, ConnectTimeout
 import time
 from random import randint
 from headers import headers
@@ -11,11 +11,20 @@ import settings
 from proxies import Proxy
 import logging
 from my_logger import MyLog
+import urllib
 
 logger = MyLog('crawler', logFileBasePath=settings.LOGS_DIR, outputFileLevel=logging.DEBUG).getLogger()
 
 proxies = Proxy()
 proxies.gen_proxies_enable("http://m.weibo.cn", 5)
+
+last_fail_file = os.path.join(settings.DATA_DIR, "last_status.json")
+
+last_fail = {}
+
+if os.path.isfile(last_fail_file):
+    with open(last_fail_file, "r") as fp:
+        last_fail = json.loads(fp.read())
 
 
 class EmptyContent(Exception):
@@ -23,9 +32,14 @@ class EmptyContent(Exception):
         self.message = "content is empty"
 
 
+class MaxFails(Exception):
+    def __init__(self):
+        self.message = "reach max try times"
+
+
 def get_user_task():
     db = MysqlHelper()
-    res = db.get_wb_user("*", [])
+    res = db.get_wb_user("*", ["uid is not null"])
     t = []
     for i in res:
         t.append({"uid": i.uid, "status": i.status})
@@ -34,62 +48,71 @@ def get_user_task():
 
 def craw_user_info(uid, status):
     url = get_wb_user_url(uid)
-    print url
+    print(url)
 
 
 def craw_user_post_update(uid):
-
     db = MysqlHelper()
     last_id = db.get_last_wb_post_id(uid)
     # print last_id
     page = 1
     url = get_wb_post_list_url(uid, page)
-    while(True):
+    while (True):
         logger.info("crawler %s" % url)
         rsp = send_request(url)
         items = parse_post(rsp)
-        max_id = items[2]['weibo_id']
-        if len(items) == 0:
-            break
-        else:
-            save_post(items)
-            # save_post_file(rsp, uid, page)
-            page += 1
-            url = get_wb_post_list_url(uid, page)
-            if int(max_id) < last_id:
+        try:
+            max_id = items[2]['weibo_id']
+            if len(items) == 0:
                 break
-        time.sleep(get_sleep_time())
+            else:
+                save_post(items)
+                # save_post_file(rsp, uid, page)
+                page += 1
+                url = get_wb_post_list_url(uid, page)
+                if int(max_id) < last_id:
+                    break
+            time.sleep(get_sleep_time())
+        except Exception:
+            pass
 
 
 def craw_user_post_all(uid):
 
     # to continue set
-    if uid == "6065555143":
-        page = 241
+    if last_fail and uid == last_fail['uid']:
+        page = last_fail['page']
     else:
         page = 1
 
     url = get_wb_post_list_url(uid, page)
 
-    while(True):
+    while (True):
         logger.info("crawler %s" % url)
-        rsp = send_request(url)
-        items = parse_post(rsp)
-        if len(items) == 0:
-            break
+        try:
+            rsp = send_request(url)
+        except MaxFails as e:
+            save_status = {"uid": uid, "page": page}
+            with open(last_fail_file, "w") as fp:
+                fp.write(json.dumps(save_status))
+            logger.error(e.message)
+            exit()  # exit script
         else:
-            save_post(items)
-            # save_post_file(rsp, uid, page)
-            page += 1
-            url = get_wb_post_list_url(uid, page)
-        time.sleep(get_sleep_time())
+            items = parse_post(rsp)
+            if len(items) == 0:
+                break
+            else:
+                save_post(items)
+                # save_post_file(rsp, uid, page)
+                page += 1
+                url = get_wb_post_list_url(uid, page)
+            time.sleep(get_sleep_time())
     db = MysqlHelper()
     db.upsert_wb_user({"uid": uid, "status": 1})
 
 
 def get_sleep_time():
-    return 1
-    # return randint(1, 3)
+    return randint(1, 3)
 
 
 def get_wb_user_url(uid):
@@ -104,12 +127,12 @@ def get_wb_post_list_url(uid, i):
 def send_request(url, retry=0):
     retry += 1
     if retry > 3:
-        raise
+        raise MaxFails
     try:
         proxy = proxies.get_proxy()
-        print proxy
-        rsp = requests.get(url, headers=headers, proxies=proxy, timeout=5)
-    except ProxyError:
+        print(proxy)
+        rsp = requests.get(url, headers=headers, proxies=proxy, timeout=8)
+    except (ProxyError, SSLError, ReadTimeout, ConnectTimeout):
         send_request(url, retry)
     else:
         if rsp.status_code == 200:
@@ -126,47 +149,50 @@ def send_request(url, retry=0):
 
 def parse_post(content):
     items = []
-    for card in content['cards']:
-        item = {}
-        if card['card_type'] == 9:
-            wb_url = card['scheme']
-            blog = card['mblog']
-            is_origin = 0 if 'retweeted_status' in blog.keys() else 1
-            item["weibo_id"] = blog['id']
-            item['weibo_uid'] = blog['user']['id']
-            item['weibo_cont'] = blog['text']
-            item['weibo_img'] = blog.get('thumbnail_pic', "")
-            item['weibo_video'] = ''
-            item['weibo_url'] = wb_url
-            item['weibo_source'] = blog['source']
-            item['is_origin'] = is_origin
-            item['is_longtext'] = blog['isLongText']
-            item['created_at'] = format_time(blog['created_at'])
-            item['device'] = ''
-            item['repost_num'] = blog['reposts_count']
-            item['comment_num'] = blog['comments_count']
-            item['praise_num'] = blog['attitudes_count']
-            item['comment_crawled'] = 0
-            item['repost_crawled'] = 0
-            item['repost'] = ''
-            if is_origin == 0:
-                try:
-                    repost = {}
-                    repost['created_at'] = format_time(blog['retweeted_status']['created_at'])
-                    repost['weibo_id'] = blog['retweeted_status']['id']
-                    repost['weibo_cont'] = blog['retweeted_status']['text']
-                    repost['thumbnail_pic'] = blog['retweeted_status'].get('thumbnail_pic', "")
-                    if blog['retweeted_status'].get('user', None):
-                        repost['uid'] = blog['retweeted_status']['user']['id']
-                    item['repost'] = json.dumps(repost)
-                except Exception, e:
-                    logger.error(e)
-            if len(blog.get('pics', '')) > 0:
-                temp = []
-                for pic in blog['pics']:
-                    temp.append(pic['pid'])
-                item['weibo_pics'] = json.dumps(temp)
-            items.append(item)
+    try:
+        for card in content['cards']:
+            item = {}
+            if card['card_type'] == 9:
+                wb_url = card['scheme']
+                blog = card['mblog']
+                is_origin = 0 if 'retweeted_status' in blog.keys() else 1
+                item["weibo_id"] = blog['id']
+                item['weibo_uid'] = blog['user']['id']
+                item['weibo_cont'] = blog['text']
+                item['weibo_img'] = blog.get('thumbnail_pic', "")
+                item['weibo_video'] = ''
+                item['weibo_url'] = wb_url
+                item['weibo_source'] = blog['source']
+                item['is_origin'] = is_origin
+                item['is_longtext'] = blog['isLongText']
+                item['created_at'] = format_time(blog['created_at'])
+                item['device'] = ''
+                item['repost_num'] = blog['reposts_count']
+                item['comment_num'] = blog['comments_count']
+                item['praise_num'] = blog['attitudes_count']
+                item['comment_crawled'] = 0
+                item['repost_crawled'] = 0
+                item['repost'] = ''
+                if is_origin == 0:
+                    try:
+                        repost = {}
+                        repost['created_at'] = format_time(blog['retweeted_status']['created_at'])
+                        repost['weibo_id'] = blog['retweeted_status']['id']
+                        repost['weibo_cont'] = blog['retweeted_status']['text']
+                        repost['thumbnail_pic'] = blog['retweeted_status'].get('thumbnail_pic', "")
+                        if blog['retweeted_status'].get('user', None):
+                            repost['uid'] = blog['retweeted_status']['user']['id']
+                        item['repost'] = json.dumps(repost)
+                    except Exception:
+                        logger.error(Exception.message)
+                if len(blog.get('pics', '')) > 0:
+                    temp = []
+                    for pic in blog['pics']:
+                        temp.append(pic['pid'])
+                    item['weibo_pics'] = json.dumps(temp)
+                items.append(item)
+    except Exception:
+        pass
     return items
 
 
@@ -186,7 +212,6 @@ def save_post(items):
 
 
 def format_time(post_time):
-
     # old days
     if "-" in post_time:
         _arr = post_time.split("-")
@@ -212,7 +237,7 @@ def test_file_save_mysql():
             save_post(items)
 
 
-if __name__ == '__main__':
+def main():
     tasks = get_user_task()
     for user in tasks:
         uid = user['uid']
@@ -224,4 +249,45 @@ if __name__ == '__main__':
             craw_user_post_all(uid)
 
 
+def get_uid(name):
+    s = urllib.quote(name)
+    search_url = "https://m.weibo.cn/api/container/getIndex?type=user&queryVal=%s&featurecode=20000320&" \
+                 "luicode=10000011&lfid=1076035675213574&title=%s&containerid=100103type%%3D3%%26q%%3D%s" % (s, s, s)
+
+    db = MysqlHelper()
+    user = db.get_wb_user("*", ("name = %s", [name]))
+    if user:
+        print("user %s is already exist, uid is %s" % (name, user[0].id))
+        return
+    proxy = proxies.get_proxy()
+    rsp = requests.get(search_url, headers=headers, proxies=proxy, timeout=5)
+    if rsp.status_code == 200:
+        data = rsp.text.decode("utf-8")
+        user = {
+            "search_data": data,
+            "name": name
+        }
+        id = db.upsert_wb_user_by_name(user)
+        return id
+    else:
+        raise Exception
+
+
+def get_uids():
+    account_file = "/share/work/weibo.md"
+    account = set()
+    with open(account_file, "r") as fp:
+        for line in fp.readlines():
+            account.add(line.strip())
+
+    for name in account:
+        id = get_uid(name)
+        message = name + ": finished, user id is " + str(id)
+        print(message)
+
+
+if __name__ == '__main__':
+    main()
+
+     # get_uids()
 

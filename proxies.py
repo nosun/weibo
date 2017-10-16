@@ -12,7 +12,8 @@ from settings import MYSQL_CONFIG_SERVICE, DATA_DIR
 class Proxy(object):
     def __init__(self):
         self.pf = os.path.join(DATA_DIR, "proxies.json")
-        self.proxies = self._get_proxies()
+        self.proxies = list()
+        self._get_proxies()
 
     def _get_proxies(self):
         # second check file
