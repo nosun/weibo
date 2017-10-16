@@ -3,7 +3,7 @@
 -- http://www.phpmyadmin.net
 --
 -- Host: 172.17.0.1:3306
--- Generation Time: Sep 30, 2017 at 03:04 PM
+-- Generation Time: Oct 16, 2017 at 07:06 PM
 -- Server version: 5.7.10
 -- PHP Version: 5.6.31-4+ubuntu16.04.1+deb.sury.org+4
 
@@ -82,7 +82,7 @@ CREATE TABLE `wb_post` (
 CREATE TABLE `wb_user` (
   `id` int(11) NOT NULL,
   `uid` varchar(20) DEFAULT NULL,
-  `status` int(1) NOT NULL DEFAULT '0',
+  `status` int(1) DEFAULT '0',
   `name` varchar(200) DEFAULT '',
   `gender` int(11) DEFAULT '0',
   `birthday` varchar(200) DEFAULT '',
@@ -99,7 +99,8 @@ CREATE TABLE `wb_user` (
   `work_info` varchar(500) DEFAULT '',
   `contact_info` varchar(300) DEFAULT '',
   `education_info` varchar(300) DEFAULT '',
-  `head_img` varchar(500) DEFAULT ''
+  `head_img` varchar(500) DEFAULT '',
+  `search_data` text
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 --
@@ -132,7 +133,8 @@ ALTER TABLE `wb_post`
 --
 ALTER TABLE `wb_user`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uid` (`uid`);
+  ADD UNIQUE KEY `uid` (`uid`),
+  ADD UNIQUE KEY `name` (`name`);
 
 --
 -- AUTO_INCREMENT for dumped tables
@@ -142,22 +144,22 @@ ALTER TABLE `wb_user`
 -- AUTO_INCREMENT for table `ins_user`
 --
 ALTER TABLE `ins_user`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=545;
 --
 -- AUTO_INCREMENT for table `user`
 --
 ALTER TABLE `user`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 --
 -- AUTO_INCREMENT for table `wb_post`
 --
 ALTER TABLE `wb_post`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63286;
 --
 -- AUTO_INCREMENT for table `wb_user`
 --
 ALTER TABLE `wb_user`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=1150;
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
