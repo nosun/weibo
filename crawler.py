@@ -15,11 +15,13 @@ import urllib
 
 logger = MyLog('crawler', logFileBasePath=settings.LOGS_DIR, outputFileLevel=logging.DEBUG).getLogger()
 
-proxies = Proxy()
-proxies.gen_proxies_enable("http://m.weibo.cn", 5)
+use_proxy = True
+time_sleep = 4
+if use_proxy:
+    proxies = Proxy()
+    proxies.gen_proxies_enable("http://m.weibo.cn", 5)
 
 last_fail_file = os.path.join(settings.DATA_DIR, "last_status.json")
-
 last_fail = {}
 
 if os.path.isfile(last_fail_file):
@@ -54,6 +56,8 @@ def craw_user_info(uid, status):
 def craw_user_post_update(uid):
     db = MysqlHelper()
     last_id = db.get_last_wb_post_id(uid)
+    if not last_id:
+        return
     # print last_id
     page = 1
     url = get_wb_post_list_url(uid, page)
@@ -61,20 +65,18 @@ def craw_user_post_update(uid):
         logger.info("crawler %s" % url)
         rsp = send_request(url)
         items = parse_post(rsp)
-        try:
-            max_id = items[2]['weibo_id']
-            if len(items) == 0:
-                break
-            else:
-                save_post(items)
-                # save_post_file(rsp, uid, page)
-                page += 1
-                url = get_wb_post_list_url(uid, page)
-                if int(max_id) < last_id:
-                    break
-            time.sleep(get_sleep_time())
-        except Exception:
-            pass
+        if len(items) < 3:
+            break
+
+        max_id = items[2]['weibo_id']
+
+        save_post(items)
+        # save_post_file(rsp, uid, page)
+        if int(max_id) < last_id:
+            break
+        page += 1
+        url = get_wb_post_list_url(uid, page)
+        time.sleep(get_sleep_time())
 
 
 def craw_user_post_all(uid):
@@ -112,7 +114,7 @@ def craw_user_post_all(uid):
 
 
 def get_sleep_time():
-    return randint(1, 3)
+    return randint(1, time_sleep)
 
 
 def get_wb_user_url(uid):
@@ -129,9 +131,12 @@ def send_request(url, retry=0):
     if retry > 3:
         raise MaxFails
     try:
-        proxy = proxies.get_proxy()
-        print(proxy)
-        rsp = requests.get(url, headers=headers, proxies=proxy, timeout=8)
+        if use_proxy:
+            proxy = proxies.get_proxy()
+            print(proxy)
+            rsp = requests.get(url, headers=headers, proxies=proxy, timeout=8)
+        else:
+            rsp = requests.get(url, headers=headers, timeout=5)
     except (ProxyError, SSLError, ReadTimeout, ConnectTimeout):
         send_request(url, retry)
     else:
@@ -227,7 +232,7 @@ def format_time(post_time):
     return time.strftime("%Y-%m-%d", time.localtime())
 
 
-def test_file_save_mysql():
+def t_file_save_mysql():
     uid = '5667151225'
     for i in range(1, 261):
         path = os.path.join(settings.DATA_DIR, 'u_' + uid + '_p' + str(i) + '.json')
@@ -245,6 +250,7 @@ def main():
         craw_user_info(uid, status)
         if status == 1:
             craw_user_post_update(uid)
+            time.sleep(get_sleep_time())
         elif status == 0:
             craw_user_post_all(uid)
 
@@ -285,6 +291,9 @@ def get_uids():
         message = name + ": finished, user id is " + str(id)
         print(message)
 
+
+def t_craw_user_post_update():
+    craw_user_post_update("5409539571")
 
 if __name__ == '__main__':
     main()

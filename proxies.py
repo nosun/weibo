@@ -59,7 +59,7 @@ class Proxy(object):
 
 if __name__ == '__main__':
     proxy = Proxy()
-    # proxy.gen_proxies_enable("https://www.baidu.com", timeout=5)
+    proxy.gen_proxies_enable("https://www.taobao.com", timeout=5)
     for i in range(1, 4):
         p = proxy.get_proxy()
         print p
