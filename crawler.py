@@ -15,7 +15,7 @@ import urllib
 
 logger = MyLog('crawler', logFileBasePath=settings.LOGS_DIR, outputFileLevel=logging.DEBUG).getLogger()
 
-use_proxy = True
+use_proxy = False
 time_sleep = 4
 if use_proxy:
     proxies = Proxy()
@@ -61,7 +61,7 @@ def craw_user_post_update(uid):
     # print last_id
     page = 1
     url = get_wb_post_list_url(uid, page)
-    while (True):
+    while True:
         logger.info("crawler %s" % url)
         rsp = send_request(url)
         items = parse_post(rsp)
@@ -80,7 +80,6 @@ def craw_user_post_update(uid):
 
 
 def craw_user_post_all(uid):
-
     # to continue set
     if last_fail and uid == last_fail['uid']:
         page = last_fail['page']
@@ -155,7 +154,7 @@ def send_request(url, retry=0):
 def parse_post(content):
     items = []
     try:
-        for card in content['cards']:
+        for card in content['data']['cards']:
             item = {}
             if card['card_type'] == 9:
                 wb_url = card['scheme']
@@ -196,7 +195,8 @@ def parse_post(content):
                         temp.append(pic['pid'])
                     item['weibo_pics'] = json.dumps(temp)
                 items.append(item)
-    except Exception:
+    except Exception as e:
+        print(e.message)
         pass
     return items
 
@@ -242,19 +242,6 @@ def t_file_save_mysql():
             save_post(items)
 
 
-def main():
-    tasks = get_user_task()
-    for user in tasks:
-        uid = user['uid']
-        status = user['status']
-        craw_user_info(uid, status)
-        if status == 1:
-            craw_user_post_update(uid)
-            time.sleep(get_sleep_time())
-        elif status == 0:
-            craw_user_post_all(uid)
-
-
 def get_uid(name):
     s = urllib.quote(name)
     search_url = "https://m.weibo.cn/api/container/getIndex?type=user&queryVal=%s&featurecode=20000320&" \
@@ -279,24 +266,19 @@ def get_uid(name):
         raise Exception
 
 
-def get_uids():
-    account_file = "/share/work/weibo.md"
-    account = set()
-    with open(account_file, "r") as fp:
-        for line in fp.readlines():
-            account.add(line.strip())
+def main():
+    #tasks = get_user_task()
+    craw_user_post_all("2872894822")
+    # for user in tasks:
+    #     uid = user['uid']
+    #     status = user['status']
+    #     craw_user_info(uid, status)
+    #     if status == 1:
+    #         craw_user_post_update(uid)
+    #         time.sleep(get_sleep_time())
+    #     elif status == 0:
+    #         craw_user_post_all(uid)
 
-    for name in account:
-        id = get_uid(name)
-        message = name + ": finished, user id is " + str(id)
-        print(message)
-
-
-def t_craw_user_post_update():
-    craw_user_post_update("5409539571")
 
 if __name__ == '__main__':
     main()
-
-     # get_uids()
-
